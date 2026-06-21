@@ -1,24 +1,23 @@
 package com.user_service.dao;
 
-import com.user_service.entity.User;
-import jakarta.persistence.Id;
+import com.user_service.entity.UserEntity;
 
 import java.util.List;
 import java.util.Optional;
 
 public interface UserDao {
 
-    User save(User user);
+    UserEntity save(UserEntity user);
 
-    Optional<User> findById(Long id);
+    Optional<UserEntity> findById(Long id);
 
-    Optional<User> findByEmail(String email);
+    Optional<UserEntity> findByEmail(String email);
 
-    List<User> findByName(String name);
+    List<UserEntity> findByName(String name);
 
-    List<User> findAll();
+    List<UserEntity> findAll();
 
-    User update(User user);
+    UserEntity update(UserEntity user);
 
     boolean delete(Long id);
 }

@@ -2,8 +2,9 @@ package com.user_service.dao.impl;
 
 import com.user_service.config.HibernateConfig;
 import com.user_service.dao.UserDao;
-import com.user_service.entity.User;
+import com.user_service.entity.UserEntity;
 import org.hibernate.Session;
+import org.hibernate.SessionFactory;
 import org.hibernate.Transaction;
 import org.hibernate.exception.ConstraintViolationException;
 import org.slf4j.Logger;
@@ -17,20 +18,32 @@ public class UserDaoImpl implements UserDao {
 
     private static final Logger logger = LoggerFactory.getLogger(UserDaoImpl.class);
 
-    @Override
-    public User save(User user) {
-        Transaction transaction = null;
+    private final SessionFactory sessionFactory;
 
-        try (Session session = HibernateConfig.getSessionFactory().openSession()) {
+    public UserDaoImpl() {
+        this.sessionFactory = HibernateConfig.getSessionFactory();
+    }
+
+    public UserDaoImpl(SessionFactory sessionFactory) {
+        this.sessionFactory = sessionFactory;
+    }
+
+    @Override
+    public UserEntity save(UserEntity user) {
+        Optional<UserEntity> existing = findByEmail(user.getEmail());
+        if (existing.isPresent()) {
+            logger.error("Повторяющийся email: {}", user.getEmail());
+            throw new RuntimeException("Email уже существует в базе: " + user.getEmail());
+        }
+
+        Transaction transaction = null;
+        try (Session session = sessionFactory.openSession()) {
             transaction = session.beginTransaction();
             session.persist(user);
             transaction.commit();
             logger.info("Пользователь успешно сохранен: {}", user.getEmail());
             return user;
-        } catch (ConstraintViolationException e) {
-            if (transaction != null) transaction.rollback();
-            logger.error("Повторяющийся email: {}", user.getEmail());
-            throw new RuntimeException("Email уже существует в базе: " + e.getMessage());
+
         } catch (Exception e) {
             if (transaction != null) transaction.rollback();
             logger.error("Пользователь не сохранен", e);
@@ -39,15 +52,15 @@ public class UserDaoImpl implements UserDao {
     }
 
     @Override
-    public Optional<User> findById(Long id) {
+    public Optional<UserEntity> findById(Long id) {
         Transaction transaction = null;
 
-        try (Session session = HibernateConfig.getSessionFactory().openSession()) {
+        try (Session session = sessionFactory.openSession()) {
             transaction = session.beginTransaction();
-            User founUser = session.find(User.class, id);
+            UserEntity foundUser = session.find(UserEntity.class, id);
             transaction.commit();
             logger.info("Пользователь успешно найден по id: {}", id);
-            return Optional.ofNullable(founUser);
+            return Optional.ofNullable(foundUser);
         } catch (Exception e) {
             if (transaction != null) transaction.rollback();
             logger.error("Ошибка поиска пользователя по id: {}", id, e);
@@ -56,17 +69,17 @@ public class UserDaoImpl implements UserDao {
     }
 
     @Override
-    public Optional<User> findByEmail(String email) {
+    public Optional<UserEntity> findByEmail(String email) {
         Transaction transaction = null;
 
-        try (Session session = HibernateConfig.getSessionFactory().openSession()) {
+        try (Session session = sessionFactory.openSession()) {
             transaction = session.beginTransaction();
-            User founUser = session.createQuery("FROM User WHERE email = :email", User.class)
+            UserEntity foundUser = session.createQuery("FROM UserEntity WHERE email = :email", UserEntity.class)
                     .setParameter("email", email)
                     .uniqueResult();
             transaction.commit();
             logger.info("Пользователь успешно найден по email: {}", email);
-            return Optional.ofNullable(founUser);
+            return Optional.ofNullable(foundUser);
         } catch (Exception e) {
             if (transaction != null) transaction.rollback();
             logger.error("Ошибка поиска пользователя по email: {}", email, e);
@@ -75,12 +88,12 @@ public class UserDaoImpl implements UserDao {
     }
 
     @Override
-    public List<User> findByName(String name) {
+    public List<UserEntity> findByName(String name) {
         Transaction transaction = null;
 
-        try (Session session = HibernateConfig.getSessionFactory().openSession()) {
+        try (Session session = sessionFactory.openSession()) {
             transaction = session.beginTransaction();
-            List<User> results = session.createQuery("FROM User WHERE name LIKE :name ORDER BY id", User.class)
+            List<UserEntity> results = session.createQuery("FROM UserEntity WHERE name LIKE :name ORDER BY id", UserEntity.class)
                     .setParameter("name", "%" + name + "%")
                     .getResultList();
             transaction.commit();
@@ -94,12 +107,12 @@ public class UserDaoImpl implements UserDao {
     }
 
     @Override
-    public List<User> findAll() {
+    public List<UserEntity> findAll() {
         Transaction transaction = null;
 
-        try (Session session = HibernateConfig.getSessionFactory().openSession()) {
+        try (Session session = sessionFactory.openSession()) {
             transaction = session.beginTransaction();
-            List<User> results = session.createQuery("FROM User ORDER BY id", User.class)
+            List<UserEntity> results = session.createQuery("FROM UserEntity ORDER BY id", UserEntity.class)
                     .getResultList();
             transaction.commit();
             logger.info("Пользователи успешно найдены");
@@ -112,12 +125,12 @@ public class UserDaoImpl implements UserDao {
     }
 
     @Override
-    public User update(User user) {
+    public UserEntity update(UserEntity user) {
         Transaction transaction = null;
 
-        try (Session session = HibernateConfig.getSessionFactory().openSession()) {
+        try (Session session = sessionFactory.openSession()) {
             transaction = session.beginTransaction();
-            User updatedUser = session.merge(user);
+            UserEntity updatedUser = session.merge(user);
             transaction.commit();
             logger.info("Пользователь успешно обновлен: {}", user.getId());
             return updatedUser;
@@ -132,9 +145,9 @@ public class UserDaoImpl implements UserDao {
     public boolean delete(Long id) {
         Transaction transaction = null;
 
-        try (Session session = HibernateConfig.getSessionFactory().openSession()) {
+        try (Session session = sessionFactory.openSession()) {
             transaction = session.beginTransaction();
-            User foundUser = session.find(User.class, id);
+            UserEntity foundUser = session.find(UserEntity.class, id);
             if (foundUser != null) {
                 session.remove(foundUser);
                 transaction.commit();
