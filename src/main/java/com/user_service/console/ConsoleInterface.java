@@ -1,28 +1,29 @@
 package com.user_service.console;
 
-import com.user_service.dao.UserDao;
-import com.user_service.dao.impl.UserDaoImpl;
-import com.user_service.entity.User;
+import com.user_service.dto.UserRequestDto;
+import com.user_service.dto.UserResponseDto;
+import com.user_service.service.UserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.Scanner;
 
+@Component
 public class ConsoleInterface {
 
-    private UserDao userDao;
+    private UserService userService;
     private Scanner scanner;
     private static final Logger logger = LoggerFactory.getLogger(ConsoleInterface.class);
 
-    public ConsoleInterface() {
-        this.userDao = new UserDaoImpl();
+    public ConsoleInterface(UserService userService) {
+        this.userService = userService;
         this.scanner = new Scanner(System.in);
     }
 
     public void start() {
-
         while (true) {
             printMenu();
             int choice = readInt("Выберите действие: ");
@@ -81,46 +82,28 @@ public class ConsoleInterface {
     }
 
     private void createUser() {
-        String name = readString("Введите имя нового пользователя");
-        if (name.trim().isEmpty()) {
-            System.out.println("Имя не может быть пустым");
-            return;
-        }
-
-        String email = readString("Введите email нового пользователя");
-        if (email.trim().isEmpty()) {
-            System.out.println("Email не может быть пустым");
-            return;
-        }
-
-        String strAge = readString("Введите возраст нового пользователя");
-        if (strAge.trim().isEmpty()) {
-            System.out.println("Возраст не может быть пустым");
-            return;
-        }
-
-        int age;
         try {
-            age = Integer.parseInt(strAge);
-            if (age <= 0) {
-                System.out.println("Возраст должен быть положительным числом");
-                return;
-            }
-        } catch (NumberFormatException e) {
-            System.out.println("Некорректный формат возраста, введите число.");
-            return;
-        }
+            String name = readString("Введите имя нового пользователя");
+            String email = readString("Введите email нового пользователя");
+            String strAge = readString("Введите возраст нового пользователя");
 
-        User newUser = new User(name, email, age);
-        userDao.save(newUser);
-        System.out.println("Пользователь успешно создан: " + newUser);
-        logger.info("Создание пользователя прошло успешно: {}", newUser);
+            UserRequestDto requestDto = new UserRequestDto(name, email, Integer.parseInt(strAge));
+            UserResponseDto createdUser = userService.createUser(requestDto);
+            System.out.println("Пользователь успешно создан: " + createdUser);
+            logger.info("Создание пользователя прошло успешно: {}", createdUser);
+        } catch (IllegalArgumentException e) {
+            System.out.println("Ошибка: " + e.getMessage());
+            logger.error("Ошибка в связи с некорректным аргументом: {}", e.getMessage());
+        } catch (RuntimeException e) {
+            System.out.println("Ошибка: " + e.getMessage());
+            logger.error("Ошибка: {}", e.getMessage());
+        }
     }
 
     private void findUserById() {
         Long id = (long) readInt("Введите id пользователя");
 
-        Optional<User> userOptional = userDao.findById(id);
+        Optional<UserResponseDto> userOptional = userService.findUserById(id);
         if (userOptional.isPresent()) {
             System.out.println(userOptional.get());
         } else {
@@ -131,7 +114,12 @@ public class ConsoleInterface {
     private void findUserByEmail() {
         String email = readString("Введите email пользователя");
 
-        Optional<User> userOptional = userDao.findByEmail(email);
+        if (email.trim().isEmpty()) {
+            System.out.println("Email не может быть пустым");
+            return;
+        }
+
+        Optional<UserResponseDto> userOptional = userService.findUserByEmail(email);
         if (userOptional.isPresent()) {
             System.out.println(userOptional.get());
         } else {
@@ -142,71 +130,64 @@ public class ConsoleInterface {
     private void findUsersByName() {
         String name = readString("Введите имя пользователя");
 
-        List<User> users = userDao.findByName(name);
+        if (name.trim().isEmpty()) {
+            System.out.println("Имя не может быть пустым");
+            return;
+        }
+
+        List<UserResponseDto> users = userService.findUsersByName(name);
         if (!users.isEmpty()) {
-            for (User user : users) {
-                System.out.println(user);
-            }
+            users.forEach(System.out::println);
         } else {
-            System.out.printf("Пользователи с именем %s не найдены\n", name);
+            System.out.printf("Пользователи с именем %s не найдены%n", name);
         }
     }
 
     private void findAllUsers() {
-        List<User> users = userDao.findAll();
-
-        if (!users.isEmpty()) {
-            for (User user : users) {
-                System.out.println(user);
-            }
+        List<UserResponseDto> results = userService.findAllUsers();
+        if (!results.isEmpty()) {
+            results.forEach(System.out::println);
         } else {
             System.out.println("Пользователи отсутствуют");
         }
     }
 
     private void updateUser() {
-        Long id = (long) readInt("Введите id пользователя");
+        try {
+            Long id = (long) readInt("Введите id пользователя");
 
-        Optional<User> userOptional = userDao.findById(id);
-        if (userOptional.isPresent()) {
-            String name = readString("Введите новое имя пользователя");
-            String email = readString("Введите новый email пользователя");
-            String strAge = readString("Введите новый возраст пользователя");
+            Optional<UserResponseDto> userOptional = userService.findUserById(id);
+            if (userOptional.isPresent()) {
+                String name = readString("Введите новое имя пользователя");
+                String email = readString("Введите новый email пользователя");
+                String strAge = readString("Введите новый возраст пользователя");
 
-            User user = userOptional.get();
+                UserResponseDto user = userOptional.get();
+                String newName = name.isEmpty() ? user.getName() : name;
+                String newEmail = email.isEmpty() ? user.getEmail() : email;
+                int newAge = strAge.isEmpty() ? user.getAge() : Integer.parseInt(strAge);
 
-            if (!name.isEmpty()) user.setName(name);
-            if (!email.isEmpty()) user.setEmail(email);
-            if (!strAge.isEmpty()) {
-                try {
-                    int age = Integer.parseInt(strAge);
-                    if (age <= 0) {
-                        System.out.println("Возраст должен быть положительным");
-                    } else {
-                        user.setAge(age);
-                    }
-                } catch (NumberFormatException e) {
-                    System.out.println("Некорректный формат возраста");
-                }
+                UserRequestDto requestDto = new UserRequestDto(newName, newEmail, newAge);
+                UserResponseDto updatedUser = userService.updateUser(id, requestDto);
+                System.out.println("Пользователь успешно обновлен: " + user);
+                logger.info("Пользователь успешно обновлен: {}", user);
+            } else {
+                System.out.printf("Пользователь с id %d не найден\n", id);
+                logger.info("Пользователь не найден по id: {}", id);
             }
-
-            userDao.update(user);
-            System.out.println("Пользователь успешно обновлен: " + user);
-            logger.info("Пользователь успешно обновлен: {}", user);
-        } else {
-            System.out.printf("Пользователь с id %d не найден\n", id);
-            logger.info("Пользователь не найден по id: {}", id);
+        } catch (RuntimeException e) {
+            System.out.println("Ошибка: " + e.getMessage());
+            logger.error("Возникла ошибка при обновлении информации о пользователе: {}", e.getMessage());
         }
     }
 
     private void deleteUser() {
         Long id = (long) readInt("Введите id пользователя: ");
 
-        Optional<User> userOptional = userDao.findById(id);
-        if (userOptional.isPresent()) {
-            userDao.delete(id);
+        boolean deleted = userService.deleteUser(id);
+        if (deleted) {
             System.out.println("Пользователь успешно удален");
-            logger.info("Пользователь успешно удален: {}", userOptional.get());
+            logger.info("Пользователь успешно удален: {}", id);
         } else {
             System.out.printf("Пользователь с id %d не найден\n", id);
             logger.info("Пользователь не был удален по id: {}", id);
