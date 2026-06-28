@@ -1,29 +1,29 @@
 package com.user_service.console;
 
-import com.user_service.dao.impl.UserDaoImpl;
-import com.user_service.entity.UserEntity;
+import com.user_service.dto.UserRequestDto;
+import com.user_service.dto.UserResponseDto;
 import com.user_service.service.UserService;
-import com.user_service.service.impl.UserServiceImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.Scanner;
 
+@Component
 public class ConsoleInterface {
 
     private UserService userService;
     private Scanner scanner;
     private static final Logger logger = LoggerFactory.getLogger(ConsoleInterface.class);
 
-    public ConsoleInterface() {
-        this.userService = new UserServiceImpl(new UserDaoImpl());
+    public ConsoleInterface(UserService userService) {
+        this.userService = userService;
         this.scanner = new Scanner(System.in);
     }
 
     public void start() {
-
         while (true) {
             printMenu();
             int choice = readInt("Выберите действие: ");
@@ -87,9 +87,10 @@ public class ConsoleInterface {
             String email = readString("Введите email нового пользователя");
             String strAge = readString("Введите возраст нового пользователя");
 
-            UserEntity newUser = userService.createUser(name, email, strAge);
-            System.out.println("Пользователь успешно создан: " + newUser);
-            logger.info("Создание пользователя прошло успешно: {}", newUser);
+            UserRequestDto requestDto = new UserRequestDto(name, email, Integer.parseInt(strAge));
+            UserResponseDto createdUser = userService.createUser(requestDto);
+            System.out.println("Пользователь успешно создан: " + createdUser);
+            logger.info("Создание пользователя прошло успешно: {}", createdUser);
         } catch (IllegalArgumentException e) {
             System.out.println("Ошибка: " + e.getMessage());
             logger.error("Ошибка в связи с некорректным аргументом: {}", e.getMessage());
@@ -102,7 +103,7 @@ public class ConsoleInterface {
     private void findUserById() {
         Long id = (long) readInt("Введите id пользователя");
 
-        Optional<UserEntity> userOptional = userService.findUserById(id);
+        Optional<UserResponseDto> userOptional = userService.findUserById(id);
         if (userOptional.isPresent()) {
             System.out.println(userOptional.get());
         } else {
@@ -118,7 +119,7 @@ public class ConsoleInterface {
             return;
         }
 
-        Optional<UserEntity> userOptional = userService.findUserByEmail(email);
+        Optional<UserResponseDto> userOptional = userService.findUserByEmail(email);
         if (userOptional.isPresent()) {
             System.out.println(userOptional.get());
         } else {
@@ -134,18 +135,16 @@ public class ConsoleInterface {
             return;
         }
 
-        List<UserEntity> users = userService.findUsersByName(name);
+        List<UserResponseDto> users = userService.findUsersByName(name);
         if (!users.isEmpty()) {
-            for (UserEntity user : users) {
-                System.out.println(user);
-            }
+            users.forEach(System.out::println);
         } else {
-            System.out.printf("Пользователи с именем %s не найдены\n", name);
+            System.out.printf("Пользователи с именем %s не найдены%n", name);
         }
     }
 
     private void findAllUsers() {
-        List<UserEntity> results = userService.findAllUsers();
+        List<UserResponseDto> results = userService.findAllUsers();
         if (!results.isEmpty()) {
             results.forEach(System.out::println);
         } else {
@@ -157,30 +156,19 @@ public class ConsoleInterface {
         try {
             Long id = (long) readInt("Введите id пользователя");
 
-            Optional<UserEntity> userOptional = userService.findUserById(id);
+            Optional<UserResponseDto> userOptional = userService.findUserById(id);
             if (userOptional.isPresent()) {
                 String name = readString("Введите новое имя пользователя");
                 String email = readString("Введите новый email пользователя");
                 String strAge = readString("Введите новый возраст пользователя");
 
-                UserEntity user = userOptional.get();
+                UserResponseDto user = userOptional.get();
+                String newName = name.isEmpty() ? user.getName() : name;
+                String newEmail = email.isEmpty() ? user.getEmail() : email;
+                int newAge = strAge.isEmpty() ? user.getAge() : Integer.parseInt(strAge);
 
-                if (!name.isEmpty()) user.setName(name);
-                if (!email.isEmpty()) user.setEmail(email);
-                if (!strAge.isEmpty()) {
-                    try {
-                        int age = Integer.parseInt(strAge);
-                        if (age <= 0) {
-                            System.out.println("Возраст должен быть положительным");
-                        } else {
-                            user.setAge(age);
-                        }
-                    } catch (NumberFormatException e) {
-                        System.out.println("Некорректный формат возраста");
-                    }
-                }
-
-                userService.updateUser(user);
+                UserRequestDto requestDto = new UserRequestDto(newName, newEmail, newAge);
+                UserResponseDto updatedUser = userService.updateUser(id, requestDto);
                 System.out.println("Пользователь успешно обновлен: " + user);
                 logger.info("Пользователь успешно обновлен: {}", user);
             } else {
@@ -191,17 +179,15 @@ public class ConsoleInterface {
             System.out.println("Ошибка: " + e.getMessage());
             logger.error("Возникла ошибка при обновлении информации о пользователе: {}", e.getMessage());
         }
-
     }
 
     private void deleteUser() {
         Long id = (long) readInt("Введите id пользователя: ");
 
-        Optional<UserEntity> userOptional = userService.findUserById(id);
-        if (userOptional.isPresent()) {
-            userService.deleteUser(id);
+        boolean deleted = userService.deleteUser(id);
+        if (deleted) {
             System.out.println("Пользователь успешно удален");
-            logger.info("Пользователь успешно удален: {}", userOptional.get());
+            logger.info("Пользователь успешно удален: {}", id);
         } else {
             System.out.printf("Пользователь с id %d не найден\n", id);
             logger.info("Пользователь не был удален по id: {}", id);
