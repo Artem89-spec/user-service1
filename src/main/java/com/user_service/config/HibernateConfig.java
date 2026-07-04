@@ -1,6 +1,6 @@
 package com.user_service.config;
 
-import com.user_service.entity.User;
+import com.user_service.entity.UserEntity;
 import org.hibernate.SessionFactory;
 import org.hibernate.cfg.Configuration;
 import org.slf4j.Logger;
@@ -39,7 +39,7 @@ public class HibernateConfig {
 
             properties.load(inputStream);
             configuration.setProperties(properties);
-            configuration.addAnnotatedClass(User.class);
+            configuration.addAnnotatedClass(UserEntity.class);
 
             return configuration.buildSessionFactory();
 
