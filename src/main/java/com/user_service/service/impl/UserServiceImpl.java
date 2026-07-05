@@ -1,5 +1,6 @@
     package com.user_service.service.impl;
 
+    import com.user_service.dto.UserNotificationDto;
     import com.user_service.dto.UserRequestDto;
     import com.user_service.dto.UserResponseDto;
     import com.user_service.entity.UserEntity;
@@ -11,6 +12,8 @@
     import org.slf4j.Logger;
     import org.slf4j.LoggerFactory;
     import org.springframework.beans.factory.annotation.Autowired;
+    import org.springframework.beans.factory.annotation.Value;
+    import org.springframework.kafka.core.KafkaTemplate;
     import org.springframework.stereotype.Service;
     import org.springframework.transaction.annotation.Transactional;
 
@@ -24,10 +27,15 @@
         private static final Logger logger = LoggerFactory.getLogger(UserServiceImpl.class);
 
         private final UserRepository userRepository;
+        private final KafkaTemplate<String, Object> kafkaTemplate;
+
+        @Value("${app.kafka.topic.user-events}")
+        private String userEventsTopic;
 
         @Autowired
-        public UserServiceImpl(UserRepository userRepository) {
+        public UserServiceImpl(UserRepository userRepository, KafkaTemplate<String, Object> kafkaTemplate) {
             this.userRepository = userRepository;
+            this.kafkaTemplate = kafkaTemplate;
         }
 
         @Override
@@ -45,6 +53,9 @@
             UserEntity savedUser = userRepository.save(user);
 
             logger.info("Сервис: пользователь c email {}  успешно создан", savedUser.getEmail());
+
+            sendNotification(savedUser, "CREATE");
+
             return convertToResponseDto(savedUser);
         }
 
@@ -149,9 +160,14 @@
                 throw new InvalidUserDataException("id", "Некорректный id пользователя");
             }
 
-            if (userRepository.existsById(id)) {
+            Optional<UserEntity> optionalUser = userRepository.findById(id);
+            if (optionalUser.isPresent()) {
+                UserEntity deletedUser = optionalUser.get();
                 userRepository.deleteById(id);
                 logger.info("Сервис: удаление пользователя с id {} прошло успешно", id);
+
+                sendNotification(deletedUser, "DELETE");
+
                 return true;
             }
 
@@ -201,5 +217,21 @@
                     userEntity.getAge(),
                     userEntity.getCreatedAt()
             );
+        }
+
+        private void sendNotification(UserEntity user, String operation) {
+            try {
+                UserNotificationDto notificationDto = new UserNotificationDto();
+                notificationDto.setEmail(user.getEmail());
+                notificationDto.setOperation(operation);
+                notificationDto.setUserId(user.getId());
+                notificationDto.setUserName(user.getName());
+
+                kafkaTemplate.send(userEventsTopic, notificationDto);
+                logger.info("Уведомление отправлено в Kafka для пользователя {} с операцией {}",
+                        user.getEmail(), operation);
+            } catch (Exception e) {
+                logger.error("Ошибка отправки уведомления в Kafka: {}", e.getMessage());
+            }
         }
     }

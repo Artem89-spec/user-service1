@@ -1,5 +1,6 @@
-package com.user_service.service;
+package com.user_service.service.impl;
 
+import com.user_service.dto.UserNotificationDto;
 import com.user_service.dto.UserRequestDto;
 import com.user_service.dto.UserResponseDto;
 import com.user_service.entity.UserEntity;
@@ -7,7 +8,6 @@ import com.user_service.exception.EmailAlreadyExistsException;
 import com.user_service.exception.InvalidUserDataException;
 import com.user_service.exception.UserNotFoundException;
 import com.user_service.repository.UserRepository;
-import com.user_service.service.impl.UserServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,6 +17,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -24,8 +26,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 
@@ -35,6 +36,9 @@ public class UserServiceImplTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private KafkaTemplate<String, Object> kafkaTemplate;
 
     @InjectMocks
     private UserServiceImpl userService;
@@ -63,6 +67,8 @@ public class UserServiceImplTest {
                 TEST_AGE,
                 LocalDateTime.now()
         );
+
+        ReflectionTestUtils.setField(userService, "userEventsTopic", "user-events");
     }
 
     @Test
@@ -81,6 +87,8 @@ public class UserServiceImplTest {
 
         verify(userRepository, times(1)).existsByEmail(TEST_EMAIL);
         verify(userRepository, times(1)).save(any(UserEntity.class));
+        verify(kafkaTemplate, times(1)).send(eq("user-events"),
+                any(UserNotificationDto.class));
     }
 
     @Test
@@ -96,6 +104,7 @@ public class UserServiceImplTest {
         assertTrue(exception.getUserMessage().contains(TEST_EMAIL));
         verify(userRepository, times(1)).existsByEmail(TEST_EMAIL);
         verify(userRepository, never()).save(any(UserEntity.class));
+        verify(kafkaTemplate, never()).send(anyString(), any());
     }
 
     @Test
@@ -109,6 +118,7 @@ public class UserServiceImplTest {
         assertEquals("Данные пользователя не могут быть null", exception.getMessage());
         verify(userRepository, never()).existsByEmail(anyString());
         verify(userRepository, never()).save(any());
+        verify(kafkaTemplate, never()).send(anyString(), any());
     }
 
     @Test
@@ -124,6 +134,7 @@ public class UserServiceImplTest {
         assertEquals("Имя пользователя не может быть пустым", exception.getMessage());
         verify(userRepository, never()).existsByEmail(anyString());
         verify(userRepository, never()).save(any());
+        verify(kafkaTemplate, never()).send(anyString(), any());
     }
 
     @Test
@@ -139,6 +150,7 @@ public class UserServiceImplTest {
         assertEquals("Имя пользователя не может быть пустым", exception.getMessage());
         verify(userRepository, never()).existsByEmail(anyString());
         verify(userRepository, never()).save(any());
+        verify(kafkaTemplate, never()).send(anyString(), any());
     }
 
     @Test
@@ -154,6 +166,7 @@ public class UserServiceImplTest {
         assertEquals("Email пользователя не может быть пустым", exception.getMessage());
         verify(userRepository, never()).existsByEmail(anyString());
         verify(userRepository, never()).save(any());
+        verify(kafkaTemplate, never()).send(anyString(), any());
     }
 
     @Test
@@ -169,6 +182,7 @@ public class UserServiceImplTest {
         assertEquals("Email пользователя не может быть пустым", exception.getMessage());
         verify(userRepository, never()).existsByEmail(anyString());
         verify(userRepository, never()).save(any());
+        verify(kafkaTemplate, never()).send(anyString(), any());
     }
 
     @Test
@@ -184,6 +198,7 @@ public class UserServiceImplTest {
         assertEquals("Возраст пользователя должен быть больше 0", exception.getMessage());
         verify(userRepository, never()).existsByEmail(anyString());
         verify(userRepository, never()).save(any());
+        verify(kafkaTemplate, never()).send(anyString(), any());
     }
 
     @Test
@@ -199,6 +214,7 @@ public class UserServiceImplTest {
         assertEquals("Возраст пользователя должен быть больше 0", exception.getMessage());
         verify(userRepository, never()).existsByEmail(anyString());
         verify(userRepository, never()).save(any());
+        verify(kafkaTemplate, never()).send(anyString(), any());
     }
 
     @ParameterizedTest
@@ -215,6 +231,7 @@ public class UserServiceImplTest {
         assertEquals("Возраст пользователя должен быть больше 0", exception.getMessage());
         verify(userRepository, never()).existsByEmail(anyString());
         verify(userRepository, never()).save(any());
+        verify(kafkaTemplate, never()).send(anyString(), any());
     }
 
     @Test
@@ -470,26 +487,32 @@ public class UserServiceImplTest {
     @Test
     @DisplayName("deleteUser - успешное удаление пользователя")
     void deleteUser_ShouldReturnTrue_WhenUserDeleted() {
-        when(userRepository.existsById(1L)).thenReturn(true);
+        UserEntity user = new UserEntity("Test", "test@mail.com", 25);
+        user.setId(1L);
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         doNothing().when(userRepository).deleteById(1L);
 
         boolean deleted = userService.deleteUser(1L);
 
         assertTrue(deleted);
-        verify(userRepository, times(1)).existsById(1L);
+        verify(userRepository, times(1)).findById(1L);
         verify(userRepository, times(1)).deleteById(1L);
+        verify(kafkaTemplate, times(1)).send(eq("user-events"),
+                any(UserNotificationDto.class));
     }
 
     @Test
     @DisplayName("deleteUser - пользователь не найден")
     void deleteUser_ShouldReturnFalse_WhenNotExists() {
-        when(userRepository.existsById(999L)).thenReturn(false);
+        when(userRepository.findById(999L)).thenReturn(Optional.empty());
 
         boolean deleted = userService.deleteUser(999L);
 
         assertFalse(deleted);
-        verify(userRepository, times(1)).existsById(999L);
+        verify(userRepository, times(1)).findById(999L);
         verify(userRepository, never()).deleteById(any());
+        verify(kafkaTemplate, never()).send(anyString(), any());
     }
 
     @Test
@@ -502,6 +525,7 @@ public class UserServiceImplTest {
 
         assertTrue(exception.getUserMessage().contains("Некорректный id"));
         verify(userRepository, never()).existsById(any());
+        verify(kafkaTemplate, never()).send(anyString(), any());
     }
 
     @Test
@@ -514,6 +538,7 @@ public class UserServiceImplTest {
 
         assertTrue(exception.getUserMessage().contains("Некорректный id"));
         verify(userRepository, never()).existsById(any());
+        verify(kafkaTemplate, never()).send(anyString(), any());
     }
 
     @Test
