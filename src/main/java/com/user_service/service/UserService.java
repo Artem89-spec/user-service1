@@ -1,23 +1,24 @@
 package com.user_service.service;
 
-import com.user_service.entity.UserEntity;
+import com.user_service.dto.UserRequestDto;
+import com.user_service.dto.UserResponseDto;
 
 import java.util.List;
 import java.util.Optional;
 
 public interface UserService {
 
-    UserEntity createUser(String name, String email, String age);
+    UserResponseDto createUser(UserRequestDto userRequestDto);
 
-    Optional<UserEntity> findUserById(Long id);
+    Optional<UserResponseDto> findUserById(Long id);
 
-    Optional<UserEntity> findUserByEmail(String email);
+    Optional<UserResponseDto> findUserByEmail(String email);
 
-    List<UserEntity> findUsersByName(String name);
+    List<UserResponseDto> findUsersByName(String name);
 
-    List<UserEntity> findAllUsers();
+    List<UserResponseDto> findAllUsers();
 
-    UserEntity updateUser(UserEntity user);
+    UserResponseDto updateUser(Long id, UserRequestDto userRequestDto);
 
     boolean deleteUser(Long id);
 
