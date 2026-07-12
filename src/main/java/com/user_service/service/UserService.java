@@ -10,9 +10,9 @@ public interface UserService {
 
     UserResponseDto createUser(UserRequestDto userRequestDto);
 
-    Optional<UserResponseDto> findUserById(Long id);
+    UserResponseDto findUserById(Long id);
 
-    Optional<UserResponseDto> findUserByEmail(String email);
+    UserResponseDto findUserByEmail(String email);
 
     List<UserResponseDto> findUsersByName(String name);
 
@@ -20,7 +20,7 @@ public interface UserService {
 
     UserResponseDto updateUser(Long id, UserRequestDto userRequestDto);
 
-    boolean deleteUser(Long id);
+    void deleteUser(Long id);
 
     boolean isUniqueEmail(String email);
 }

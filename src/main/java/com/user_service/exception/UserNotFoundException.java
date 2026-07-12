@@ -17,11 +17,4 @@ public class UserNotFoundException extends UserServiceException {
                 String.format("Пользователь с email %s не найден", email)
         );
     }
-
-    public UserNotFoundException(Long id, String email) {
-        super(
-                ERROR_CODE,
-                String.format("Пользователь с ID %d и email %s не найден", id, email)
-        );
-    }
 }

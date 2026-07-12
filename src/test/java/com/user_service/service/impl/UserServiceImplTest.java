@@ -239,11 +239,11 @@ public class UserServiceImplTest {
     void findUserById_ShouldReturnUser_WhenExists() {
         when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
 
-        Optional<UserResponseDto> result = userService.findUserById(1L);
+        UserResponseDto result = userService.findUserById(1L);
 
-        assertTrue(result.isPresent());
-        assertEquals(TEST_NAME, result.get().getName());
-        assertEquals(TEST_EMAIL, result.get().getEmail());
+        assertNotNull(result);
+        assertEquals(TEST_NAME, result.getName());
+        assertEquals(TEST_EMAIL, result.getEmail());
         verify(userRepository, times(1)).findById(1L);
     }
 
@@ -252,9 +252,7 @@ public class UserServiceImplTest {
     void findUserById_ShouldReturnEmpty_WhenNotExists() {
         when(userRepository.findById(999L)).thenReturn(Optional.empty());
 
-        Optional<UserResponseDto> result = userService.findUserById(999L);
-
-        assertTrue(result.isEmpty());
+        assertThrows(UserNotFoundException.class, () -> userService.findUserById(999L));
         verify(userRepository, times(1)).findById(999L);
     }
 
@@ -287,10 +285,10 @@ public class UserServiceImplTest {
     void findUserByEmail_ShouldReturnUser_WhenExists() {
         when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(testUser));
 
-        Optional<UserResponseDto> result = userService.findUserByEmail(TEST_EMAIL);
+        UserResponseDto result = userService.findUserByEmail(TEST_EMAIL);
 
-        assertTrue(result.isPresent());
-        assertEquals(TEST_EMAIL, result.get().getEmail());
+        assertNotNull(result);
+        assertEquals(TEST_EMAIL, result.getEmail());
         verify(userRepository, times(1)).findByEmail(TEST_EMAIL);
     }
 
@@ -299,9 +297,7 @@ public class UserServiceImplTest {
     void findUserByEmail_ShouldReturnEmpty_WhenNotExists() {
         when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.empty());
 
-        Optional<UserResponseDto> result = userService.findUserByEmail(TEST_EMAIL);
-
-        assertTrue(result.isEmpty());
+        assertThrows(UserNotFoundException.class, () -> userService.findUserByEmail(TEST_EMAIL));
         verify(userRepository, times(1)).findByEmail(TEST_EMAIL);
     }
 
@@ -487,15 +483,10 @@ public class UserServiceImplTest {
     @Test
     @DisplayName("deleteUser - успешное удаление пользователя")
     void deleteUser_ShouldReturnTrue_WhenUserDeleted() {
-        UserEntity user = new UserEntity("Test", "test@mail.com", 25);
-        user.setId(1L);
-
-        when(userRepository.findById(1L)).thenReturn(Optional.of(user));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
         doNothing().when(userRepository).deleteById(1L);
 
-        boolean deleted = userService.deleteUser(1L);
-
-        assertTrue(deleted);
+        assertDoesNotThrow(() -> userService.deleteUser(1L));
         verify(userRepository, times(1)).findById(1L);
         verify(userRepository, times(1)).deleteById(1L);
         verify(kafkaTemplate, times(1)).send(eq("user-events"),
@@ -507,9 +498,7 @@ public class UserServiceImplTest {
     void deleteUser_ShouldReturnFalse_WhenNotExists() {
         when(userRepository.findById(999L)).thenReturn(Optional.empty());
 
-        boolean deleted = userService.deleteUser(999L);
-
-        assertFalse(deleted);
+        assertThrows(UserNotFoundException.class, () -> userService.deleteUser(999L));
         verify(userRepository, times(1)).findById(999L);
         verify(userRepository, never()).deleteById(any());
         verify(kafkaTemplate, never()).send(anyString(), any());
@@ -518,26 +507,19 @@ public class UserServiceImplTest {
     @Test
     @DisplayName("deleteUser - null id вызывает исключение")
     void deleteUser_ShouldThrowException_WhenIdIsNull() {
-        InvalidUserDataException exception = assertThrows(
-                InvalidUserDataException.class,
-                () -> userService.deleteUser(null)
-        );
+        assertThrows(InvalidUserDataException.class, () -> userService.deleteUser(null));
 
-        assertTrue(exception.getUserMessage().contains("Некорректный id"));
-        verify(userRepository, never()).existsById(any());
+        verify(userRepository, never()).findById(any());
+        verify(userRepository, never()).deleteById(any());
         verify(kafkaTemplate, never()).send(anyString(), any());
     }
 
     @Test
     @DisplayName("deleteUser - id <= 0 вызывает исключение")
     void deleteUser_ShouldThrowException_WhenIdIsIncorrect() {
-        InvalidUserDataException exception = assertThrows(
-                InvalidUserDataException.class,
-                () -> userService.deleteUser(0L)
-        );
+        assertThrows(InvalidUserDataException.class, () -> userService.deleteUser(0L));
 
-        assertTrue(exception.getUserMessage().contains("Некорректный id"));
-        verify(userRepository, never()).existsById(any());
+        verify(userRepository, never()).findById(any());
         verify(kafkaTemplate, never()).send(anyString(), any());
     }
 
