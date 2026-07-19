@@ -60,7 +60,7 @@
         }
 
         @Override
-        public Optional<UserResponseDto> findUserById(Long id) {
+        public UserResponseDto findUserById(Long id) {
             logger.info("Сервис: поиск пользователя по id {}", id);
             if (id == null || id <= 0) {
                 logger.error("Был введен некорректный id {}", id);
@@ -68,16 +68,16 @@
             }
 
             Optional<UserEntity> user = userRepository.findById(id);
-            if (user.isPresent()) {
-                logger.info("Сервис: пользователь с id {} успешно найден.", id);
-            } else {
+            if (user.isEmpty()) {
                 logger.info("Сервис: пользователь с id {} не найден.", id);
+                throw new UserNotFoundException(id);
             }
-            return user.map(this::convertToResponseDto);
+            logger.info("Сервис: пользователь с id {} успешно найден.", id);
+            return convertToResponseDto(user.get());
         }
 
         @Override
-        public Optional<UserResponseDto> findUserByEmail(String email) {
+        public UserResponseDto findUserByEmail(String email) {
             logger.info("Сервис: поиск пользователя по email {}", email);
             if (email == null || email.trim().isEmpty()) {
                 logger.error("Был введен некорректный email {}", email);
@@ -85,12 +85,12 @@
             }
 
             Optional<UserEntity> user = userRepository.findByEmail(email);
-            if (user.isPresent()) {
-                logger.info("Сервис: пользователь с email {} успешно найден.", email);
-            } else {
+            if (user.isEmpty()) {
                 logger.info("Сервис: пользователь с email {} не найден.", email);
+                throw new UserNotFoundException(email);
             }
-            return user.map(this::convertToResponseDto);
+            logger.info("Сервис: пользователь с email {} успешно найден.", email);
+            return convertToResponseDto(user.get());
         }
 
         @Override
@@ -154,25 +154,23 @@
         }
 
         @Override
-        public boolean deleteUser(Long id) {
+        public void deleteUser(Long id) throws UserNotFoundException {
             logger.info("Сервис: удаление пользователя с id {}", id);
             if (id == null || id <= 0) {
                 throw new InvalidUserDataException("id", "Некорректный id пользователя");
             }
 
             Optional<UserEntity> optionalUser = userRepository.findById(id);
-            if (optionalUser.isPresent()) {
-                UserEntity deletedUser = optionalUser.get();
-                userRepository.deleteById(id);
-                logger.info("Сервис: удаление пользователя с id {} прошло успешно", id);
-
-                sendNotification(deletedUser, "DELETE");
-
-                return true;
+            if (optionalUser.isEmpty()) {
+                logger.info("Сервис: пользователь с id {} не удален", id);
+                throw new UserNotFoundException(id);
             }
 
-            logger.info("Сервис: пользователь с id {} не удален", id);
-            return false;
+            UserEntity deletedUser = optionalUser.get();
+            userRepository.deleteById(id);
+            logger.info("Сервис: удаление пользователя с id {} прошло успешно", id);
+
+            sendNotification(deletedUser, "DELETE");
         }
 
         @Override
