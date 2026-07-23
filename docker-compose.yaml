@@ -1,5 +1,6 @@
-version: '3.8'
 services:
+
+  # Infrastructure
   zookeeper:
     image: confluentinc/cp-zookeeper:latest
     environment:
@@ -7,6 +8,8 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
     ports:
       - "2181:2181"
+    networks:
+      - microservices-network
 
   kafka:
     image: confluentinc/cp-kafka:7.4.0
@@ -15,10 +18,13 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     ports:
       - "9092:9092"
+    networks:
+      - microservices-network
 
   postgres:
     image: postgres:16-alpine
@@ -28,3 +34,83 @@ services:
       POSTGRES_PASSWORD: 123
     ports:
       - "5432:5432"
+    networks:
+      - microservices-network
+
+  # Spring-services
+  config-server:
+    build: ./config-server
+    container_name: config-server
+    ports:
+      - "8888:8888"
+    environment:
+      EUREKA_CLIENT_SERVICE-URL_DEFAULTZONE: http://discovery-service:8761/eureka/
+      EUREKA_CLIENT_REGISTER_WITH_EUREKA: "false"
+      EUREKA_CLIENT_FETCH_REGISTRY: "false"
+    networks:
+      - microservices-network
+    restart: on-failure
+
+  discovery-service:
+    build: ./discovery-service
+    container_name: discovery-service
+    ports:
+      - "8761:8761"
+    networks:
+      - microservices-network
+    restart: on-failure
+
+  # Business-services
+  user-service:
+    build: .
+    container_name: user-service
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
+      SPRING_APPLICATION_JSON: '{"eureka":{"client":{"serviceUrl":{"defaultZone":"http://discovery-service:8761/eureka/"}}}}'
+      DB_PASSWORD: 123
+    depends_on:
+      - config-server
+      - discovery-service
+      - postgres
+      - kafka
+    networks:
+      - microservices-network
+    restart: on-failure
+
+  gateway-service:
+    build: ./gateway-service
+    container_name: gateway-service
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_APPLICATION_JSON: '{"eureka":{"client":{"serviceUrl":{"defaultZone":"http://discovery-service:8761/eureka/"}}}}'
+    depends_on:
+      - discovery-service
+    networks:
+      - microservices-network
+    restart: on-failure
+
+  notification-service:
+    build: ../notification-service
+    container_name: notification-service
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_MAIL_HOST: smtp.gmail.com
+      SPRING_MAIL_PORT: 587
+      SPRING_MAIL_USERNAME: zhuravlev89artem@gmail.com
+      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD}
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH: "true"
+      SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE: "true"
+    depends_on:
+      - kafka
+    networks:
+      - microservices-network
+    restart: on-failure
+
+networks:
+  microservices-network:
+    driver: bridge
