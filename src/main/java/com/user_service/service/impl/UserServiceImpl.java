@@ -14,6 +14,7 @@
     import org.springframework.beans.factory.annotation.Autowired;
     import org.springframework.beans.factory.annotation.Value;
     import org.springframework.kafka.core.KafkaTemplate;
+    import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
     import org.springframework.stereotype.Service;
     import org.springframework.transaction.annotation.Transactional;
 
@@ -217,6 +218,7 @@
             );
         }
 
+        @CircuitBreaker(name = "kafkaProducer", fallbackMethod = "sendNotificationFallback")
         private void sendNotification(UserEntity user, String operation) {
             try {
                 UserNotificationDto notificationDto = new UserNotificationDto();
@@ -231,5 +233,10 @@
             } catch (Exception e) {
                 logger.error("Ошибка отправки уведомления в Kafka: {}", e.getMessage());
             }
+        }
+
+        private void sendNotificationFallback(UserEntity user, String operation, Throwable t) {
+            logger.warn("Circuit Breaker сработал: не удалось отправить уведомление в Kafka для {} (операция {}): {}",
+                    user.getEmail(), operation, t.getMessage());
         }
     }
